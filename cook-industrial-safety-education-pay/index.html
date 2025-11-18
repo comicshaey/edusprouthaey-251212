@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>조리종사원 산안전보건교육 인건비 계산기</title>
   <link rel="stylesheet" href="/static/style.css">
-  <style>
+
+
+
+<style>
     body{
       font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif;
       color:#111;
@@ -25,23 +28,27 @@
     /* 결과 박스 + 테이블 */
     .result{
       margin-top:12px;
-      padding:10px 16px;          /* 좌우 여유 */
+      padding:10px 16px;
       background:#f9fafb;
       border-radius:8px;
       font-size:0.9rem;
-      overflow-x:auto;            /* 좁은 화면에서는 가로 스크롤 */
+      overflow-x:hidden;          /* ★ 스크롤 제거 */
     }
     .result table{
       width:100%;
-      box-sizing:border-box;      /* 패딩 포함해서 카드 안에서만 100% */
+      box-sizing:border-box;
       border-collapse:separate;
       border-spacing:0;
       font-size:0.9rem;
+
+      table-layout:fixed; /* 가로폭 고정 */
+      word-break:keep-all; /* 줄바꿈 */
     }
     .result th,
     .result td{
       padding:4px 6px;
       text-align:right;
+      white-space:normal;  /* 자동 줄바꿈 */
     }
     .result th:first-child,
     .result td:first-child{
@@ -122,7 +129,11 @@
     @media (max-width:600px){
       .card{border-radius:12px;padding:14px 12px}
     }
-  </style>
+</style>
+
+
+
+  
 </head>
 <body>
   <div class="wrap">
@@ -300,3 +311,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+
