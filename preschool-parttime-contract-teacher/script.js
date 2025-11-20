@@ -1,7 +1,7 @@
 // 251120 유치원 시간제근무 기간제교원 인건비 계산기 스크립트
-//어휴 씨 짜증나
 
-// ----- 공통 헬퍼 -----
+// 졸리다
+
 function $(id) {
   return document.getElementById(id);
 }
@@ -11,7 +11,7 @@ function toNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// 원단위 절삭(10원 단위 버림)
+// 원단위 절삭(10원 단위 버림: 1111 → 1110)
 function floorTo10(v) {
   const n = Number(v) || 0;
   return Math.floor(n / 10) * 10;
@@ -67,17 +67,40 @@ function getCareerYearsFloat() {
 // 교원연구비 (정상근무 기준 월액) – 필요 시 금액 조정
 function calcTeacherResearchFull(careerYears) {
   if (!careerYears || careerYears < 0) return 0;
+  // 예시: 5년 미만 75,000원 / 5년 이상 60,000원 (실제 금액은 지침에 맞게 수정)
   return careerYears >= 5 ? 60000 : 75000;
+}
+
+// 정근수당 가산금 (정상근무 기준 월액) – 구간/금액은 업무지침에 맞게 조정해서 사용
+function calcLongevityAddonFullMonthly(careerYears) {
+  if (!careerYears || careerYears < 0) return 0;
+
+  if (careerYears >= 20) return 80000;
+  if (careerYears >= 15) return 60000;
+  if (careerYears >= 10) return 40000;
+  if (careerYears >= 5) return 20000;
+  return 0;
 }
 
 // 가족수당(정상근무 기준 월액)
 function calcFamilyFullMonthly() {
   const spouseInput = document.querySelector('input[name="spouseFlag"]:checked');
   const hasSpouse = spouseInput ? spouseInput.value === "Y" : false;
-  const childInput = $("childCount");
-  let childCount = childInput ? toNumber(childInput.value) : 0;
-  if (!Number.isFinite(childCount) || childCount < 0) childCount = 0;
-  childCount = Math.floor(childCount);
+
+  const firstEl = $("childFirst");
+  const secondEl = $("childSecond");
+  const thirdPlusEl = $("childThirdPlus");
+
+  let first = firstEl ? toNumber(firstEl.value) : 0;
+  let second = secondEl ? toNumber(secondEl.value) : 0;
+  let thirdPlus = thirdPlusEl ? toNumber(thirdPlusEl.value) : 0;
+
+  // 음수/소수 방지
+  first = Math.max(0, Math.floor(first));
+  second = Math.max(0, Math.floor(second));
+  thirdPlus = Math.max(0, Math.floor(thirdPlus));
+
+  const childCount = first + second + thirdPlus;
 
   let total = 0;
 
@@ -85,7 +108,7 @@ function calcFamilyFullMonthly() {
     total += FAMILY_SPOUSE;
   }
 
-  // 자녀수당 총액
+  // 자녀수당 총액 (정상근무 기준)
   if (childCount >= 1) {
     if (childCount === 1) total += 50000;
     else if (childCount === 2) total += 80000;
@@ -103,11 +126,14 @@ function applyAutoAllowances() {
   const fullFamily = calcFamilyFullMonthly();
   const careerYears = getCareerYearsFloat();
   const fullResearch = calcTeacherResearchFull(careerYears);
+  const fullLongevity = calcLongevityAddonFullMonthly(careerYears);
 
   const semFamily = fullFamily * 0.5; // 학기중 4시간(주20시간)
   const vacFamily = fullFamily;       // 방학중 8시간(주40시간)
   const semResearch = fullResearch * 0.5;
   const vacResearch = fullResearch;
+  const semLongevity = fullLongevity * 0.5;
+  const vacLongevity = fullLongevity;
 
   rows.forEach((row) => {
     const nameInput = row.querySelector(".allow-name");
@@ -125,22 +151,30 @@ function applyAutoAllowances() {
       vacInput.value = TEACH_ALLOW_8H;
     } else if (name === "가족수당") {
       if (fullFamily > 0) {
-        semInput.value = Math.round(semFamily);
-        vacInput.value = Math.round(vacFamily);
+        semInput.value = floorTo10(semFamily);
+        vacInput.value = floorTo10(vacFamily);
       } else {
         semInput.value = "";
         vacInput.value = "";
       }
     } else if (name === "교원연구비") {
       if (fullResearch > 0) {
-        semInput.value = Math.round(semResearch);
-        vacInput.value = Math.round(vacResearch);
+        semInput.value = floorTo10(semResearch);
+        vacInput.value = floorTo10(vacResearch);
+      } else {
+        semInput.value = "";
+        vacInput.value = "";
+      }
+    } else if (name === "정근수당 가산금") {
+      if (fullLongevity > 0) {
+        semInput.value = floorTo10(semLongevity);
+        vacInput.value = floorTo10(vacLongevity);
       } else {
         semInput.value = "";
         vacInput.value = "";
       }
     }
-    // 정근수당 가산금 등은 수동 입력
+    // 나머지 수당은 수동 입력 유지
   });
 }
 
@@ -285,6 +319,40 @@ function buildMonthTable() {
   wrap.innerHTML = html;
 }
 
+// 정근수당 연간 기준액 → 학사일정 기준 일할계산해서 annual "정근수당" 행에 반영
+function autoFillAnnualLongevityBySchedule() {
+  const baseInput = $("longevityBaseAnnual");
+  if (!baseInput) return;
+  const baseAnnual = toNumber(baseInput.value);
+  if (!baseAnnual) return;
+
+  const monthRows = document.querySelectorAll(".month-row");
+  if (!monthRows.length) return;
+
+  let totalDays = 0;
+  monthRows.forEach((row) => {
+    const semDays = toNumber(row.querySelector(".sem-days")?.value);
+    const vacDays = toNumber(row.querySelector(".vac-days")?.value);
+    const noafDays = toNumber(row.querySelector(".noaf-days")?.value);
+    totalDays += semDays + vacDays + noafDays;
+  });
+
+  if (!totalDays) return;
+
+  // 기준: 1년 365일로 보고, 계약기간 달력일수 비율만큼 일할계산
+  const prorated = baseAnnual * (totalDays / 365);
+  const proratedRounded = floorTo10(prorated);
+
+  const annualRows = document.querySelectorAll(".annual-row");
+  annualRows.forEach((row) => {
+    const name = (row.querySelector(".annual-name")?.value || "").trim();
+    if (name === "정근수당") {
+      const amtInput = row.querySelector(".annual-amount");
+      if (amtInput) amtInput.value = proratedRounded;
+    }
+  });
+}
+
 // ----- 3단계: 월별 인건비 + 퇴직금 계산 -----
 function calcMonthly() {
   const errEl = $("calcError");
@@ -303,6 +371,9 @@ function calcMonthly() {
     errEl.textContent = "2단계로 월별 일수를 먼저 계산하세요.";
     return;
   }
+
+  // 정근수당 연간 기준액이 있으면 학사일정 기준 일할계산해서 annual "정근수당" 행 자동 반영
+  autoFillAnnualLongevityBySchedule();
 
   // 4대보험 비율 (기관부담 기준, 근사치)
   const R_PENSION_ORG = 0.045;
@@ -324,7 +395,8 @@ function calcMonthly() {
   });
 
   const monthCount = monthRows.length;
-  const annualPerMonth = monthCount ? annualTotal / monthCount : 0;
+  const annualPerMonthRaw = monthCount ? annualTotal / monthCount : 0;
+  const annualPerMonth = floorTo10(annualPerMonthRaw);
 
   const months = [];
 
@@ -341,18 +413,28 @@ function calcMonthly() {
     const vacHours = vacDays * 8;
     const monthHours = semHours + vacHours;
 
-    const wageSem = baseInfo.semHour * (semDays + noafDays) * 4;
-    const wageVac = baseInfo.vacHour * vacDays * 8;
-    const wageMonth = wageSem + wageVac;
+    // ----- 핵심 변경: 방학·미운영 0일인 달은 4시간 기준 "전액 지급" -----
+    let wageMonthRaw = 0;
 
-    const annualMonth = annualPerMonth;
+    if (vacDays === 0 && noafDays === 0 && (semDays > 0)) {
+      // 학기중만 있는 달 → 학기중 기본급(4시간) + 학기중 수당 전액
+      wageMonthRaw = baseInfo.base4Sem + baseInfo.allowSem;
+    } else {
+      // 그 외 달 → 기존처럼 시간당 단가 × 실제 근무시간으로 일할계산
+      const wageSem = baseInfo.semHour * (semDays + noafDays) * 4;
+      const wageVac = baseInfo.vacHour * vacDays * 8;
+      wageMonthRaw = wageSem + wageVac;
+    }
+
+    const wageMonth = floorTo10(wageMonthRaw);
+    const annualMonth = annualPerMonth; // 이미 10원단위 절삭
 
     const pensionOrg = wageMonth * R_PENSION_ORG;
     const healthOrg = wageMonth * R_HEALTH_ORG;
     const ltcOrg = wageMonth * R_LTC_ORG;
     const employOrg = wageMonth * R_EMPLOY_ORG;
 
-    const org4 = pensionOrg + healthOrg + ltcOrg + employOrg;
+    const org4 = floorTo10(pensionOrg + healthOrg + ltcOrg + employOrg);
 
     totalWageAll += wageMonth;
     totalAnnualAll += annualMonth;
@@ -369,6 +451,8 @@ function calcMonthly() {
       org4,
     });
   });
+
+  const totalIncomeAll = totalWageAll + totalAnnualAll;
 
   tbodyHtml = months
     .map((m) => {
@@ -388,8 +472,6 @@ function calcMonthly() {
       `;
     })
     .join("");
-
-  const totalIncomeAll = totalWageAll + totalAnnualAll;
 
   const table = document.createElement("div");
   table.className = "table-wrap";
@@ -661,8 +743,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const calcBtn = $("calcBtn");
   if (calcBtn) calcBtn.addEventListener("click", calcMonthly);
 
-  // 가족사항/경력연수 변경 시도 1단계 내용 자동 갱신
-  ["careerYears", "careerMonths", "careerDays", "childCount"].forEach((id) => {
+  // 가족사항/경력연수 변경 시 1단계 내용 재계산
+  [
+    "careerYears",
+    "careerMonths",
+    "careerDays",
+    "childFirst",
+    "childSecond",
+    "childThirdPlus"
+  ].forEach((id) => {
     const el = $(id);
     if (el) {
       el.addEventListener("input", () => {
