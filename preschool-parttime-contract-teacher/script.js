@@ -105,7 +105,6 @@ function applyAutoAllowances(){
         vac.value="";
       }
     }
-    // "정근수당 가산금"은 수기입력: 건드리지 않음
   });
 }
 
@@ -172,7 +171,7 @@ function buildMonthTable(){
     if(!map.has(ym))map.set(ym,{sem:0,vac:0,noaf:0});
     const cell=map.get(ym);
 
-    // ★ 우선순위 변경: 방과후 미운영(4h) > 방학(8h) > 학기중
+    // 방과후 미운영(4h) > 방학(8h) > 학기중
     if(inRange(cur,noAf)) cell.noaf++;
     else if(inRange(cur,vac)) cell.vac++;
     else cell.sem++;
@@ -238,7 +237,7 @@ function calcMonthly(){
   const R_PEN=0.045;
   const R_HEAL=0.03545;
   const R_LTC=0.1267*R_HEAL;
-  const R_EMP=0.009;
+  const R_EMP=0.0175;
   const R_IND=0.00966; // 산재보험 0.966%
 
   // ----- 수당별 합계용 사전 준비 -----
@@ -409,7 +408,7 @@ function calcMonthly(){
       const retire=floorTo10(daily*30);
       wrap.innerHTML+=`
       <div class="card">
-        <h3 style="margin-top:0;font-size:15px;">퇴직금 개략 산정 (계속근로 1년 이상)</h3>
+        <h3 style="margin-top:0;font-size:15px;">퇴직금 대충 산정 (계속근로 1년 이상)</h3>
         <p class="hint">
           ·계약기간 달력일수: ${days}일 기준<br/>
           ·계약기간 전체 임금을 달력일수로 나눈 1일 평균임금 *30일. 원단위 절삭
@@ -566,3 +565,4 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("docTypeSelect")?.addEventListener("change",renderDocGuide);
   renderDocGuide();
 });
+
