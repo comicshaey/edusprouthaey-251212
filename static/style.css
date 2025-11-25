@@ -194,6 +194,7 @@ main {
 .link-row {
   margin-top: 8px;
   display: flex;
+  flex-direction: column;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
