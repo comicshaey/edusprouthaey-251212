@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       const fixed = snap.fixedAmounts || {};
       const meal = Number(fixed["정액급식비"] || 0);
       vacBasic.value = base ? String(base) : "";
-      vacMeal.value  = meal ? String(meal) : "";
+      vacMeal.value  = meal ? String(밥) : "";
 
       vacBasic.disabled = true;
       vacMeal.disabled  = true;
@@ -402,7 +402,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
           const base = Number(job.기본급 || 0);
           const meal = Number(fixed["정액급식비"] || 0);
           vacBasic.value = base ? String(base) : "";
-          vacMeal.value  = meal ? String(meal) : "";
+          vacMeal.value  = meal ? String(밥) : "";
         }
       }
     }
