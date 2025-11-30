@@ -169,12 +169,12 @@
     .row:not(:first-child) > .cell:nth-child(1) .date{ color:var(--sun) }
     .row:not(:first-child) > .cell:nth-child(7) .date{ color:var(--sat) }
 
-    /* 🔴 공휴일 / 🟣 재량휴업일 색상 우선 적용 */
+    /* 색상 우선 적용 - 공휴일: 빨강 / 재량휴업일: 초록 */
     .date.holiday-national{
       color:var(--sun);
     }
     .date.holiday-schooloff{
-      color:#8b00af;
+      color:green;
     }
     .date.holiday-national .date-link,
     .date.holiday-schooloff .date-link{
