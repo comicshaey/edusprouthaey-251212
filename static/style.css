@@ -28,7 +28,7 @@ a {
    전역 헤딩/텍스트 스타일 – 우선순위 강화(body h2 등)
    --------------------------- */
 body h1 {
-  font-size: 2.5rem;
+  font-size: 2.0rem;
   margin: 18px 0 14px;
   text-align: center !important;
 }
@@ -132,7 +132,7 @@ main {
 
 .site-header h1 {
   margin: 0 0 6px;
-  font-size: 1.6rem;
+  font-size: 2.2rem;
 }
 
 /* 섹션 카드 */
