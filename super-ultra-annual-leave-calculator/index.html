@@ -15,7 +15,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
-    /* 오류 박스 */
     #errorCard {
       display: none;
     }
@@ -63,6 +62,17 @@
     .highlight {
       font-weight: 700;
     }
+    #niceDebugBox {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #f9fafb;
+      border: 1px dashed #d4d4d8;
+      font-size: 0.85rem;
+      max-height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 
@@ -95,7 +105,8 @@
         </div>
 
         <p class="muted local-small">
-          헤더에서 <b>“종별”</b>, <b>“일수/기간”</b>과 비슷한 이름을 자동 탐색해서 복무별 사용시간을 집계합니다.
+          헤더에서 <b>“종별”</b>, <b>“일수/기간”</b>과 비슷한 이름을 자동 탐색해서 복무별 사용시간을 집계합니다.<br>
+          (디버그용으로 아래에 인식한 헤더·레코드 수를 그대로 보여줍니다.)
         </p>
 
         <div class="row" style="margin-top:8px;">
@@ -105,6 +116,10 @@
 
         <div id="niceStatus" class="status" style="margin-top:6px;">
           Pyodide 로딩이 완료되면 업로드가 가능합니다.
+        </div>
+
+        <div id="niceDebugBox" class="muted">
+          (헤더 인식·레코드 내용은 여기 표시됩니다.)
         </div>
       </div>
 
@@ -301,6 +316,10 @@
       console.error("PY ERROR:", err);
     }
 
+    function setNiceDebug(text) {
+      document.getElementById("niceDebugBox").textContent = text;
+    }
+
     // Pyodide 초기화
     async function initPyodide() {
       const pyStatus = document.getElementById("pyStatus");
@@ -309,11 +328,8 @@
         pyStatus.textContent = "Pyodide 로딩 중...";
         pyodide = await loadPyodide();
 
-        // annual_engine.py를 불러와서 FS에 기록
         const engineCode = await (await fetch("annual_engine.py")).text();
         pyodide.FS.writeFile("annual_engine.py", engineCode);
-
-        // 모듈 import
         await pyodide.runPythonAsync("import annual_engine");
 
         pyReady = true;
@@ -330,7 +346,6 @@
     }
     initPyodide();
 
-    // 헤더 추측 함수
     function guessLeaveCol(headers) {
       const cands = ["종별", "복무", "근무상태", "근태", "근무구분"];
       for (const h of headers) {
@@ -370,6 +385,7 @@
       const hpd = parseFloat(document.getElementById("niceHoursPerDay").value || "8") || 8;
       const status = document.getElementById("niceStatus");
       status.textContent = "파일 읽는 중...";
+      setNiceDebug("(파일 읽는 중...)");
 
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -387,6 +403,7 @@
 
           if (!rows.length) {
             status.textContent = "시트에 데이터가 없습니다.";
+            setNiceDebug("rows.length = 0 (데이터 없음)");
             return;
           }
 
@@ -394,21 +411,46 @@
           const leaveCol = guessLeaveCol(headers);
           const durCol = guessDurCol(headers);
 
+          let debugText = "";
+          debugText += `▶ 헤더 전체: ${JSON.stringify(headers)}\n`;
+          debugText += `▶ 종별 열 추정: ${leaveCol}\n`;
+          debugText += `▶ 일수/기간 열 추정: ${durCol}\n`;
+
           if (!leaveCol || !durCol) {
             status.textContent = "‘종별’ 또는 ‘일수/기간’ 열을 찾지 못했습니다.";
-            alert("헤더명을 확인해주세요.");
+            status.classList.add("danger");
+            debugText += "\n※ 필요한 열을 찾지 못해 집계를 중단했습니다.";
+            setNiceDebug(debugText);
+            alert("헤더명을 확인해주세요. (종별 / 일수/기간)");
             return;
           }
 
           const records = rows
             .filter(r => r[leaveCol] !== null && r[leaveCol] !== "")
-            .map(r => ({
+            .map((r, idx) => ({
               leave_type: String(r[leaveCol]),
               duration_raw: String(r[durCol] ?? "")
             }));
 
+          debugText += `▶ 종별 값이 있는 행 수: ${records.length}건\n`;
+          debugText += `▶ 예시 5건까지:\n`;
+          records.slice(0, 5).forEach((rec, i) => {
+            debugText += `  [${i}] leave_type=${rec.leave_type}, duration_raw=${rec.duration_raw}\n`;
+          });
+
+          if (!records.length) {
+            status.textContent = "종별 값이 있는 행이 0건입니다.";
+            status.classList.add("danger");
+            debugText += "\n※ 종별 값이 있는 행이 없어 파이썬 집계를 호출하지 않았습니다.";
+            setNiceDebug(debugText);
+            return;
+          }
+
           pyodide.globals.set("records_js", pyodide.toPy(records));
           pyodide.globals.set("hours_js", hpd);
+
+          status.textContent = "파이썬 집계 중...";
+          debugText += "\n▶ 파이썬 summarize_nice_records 호출...\n";
 
           const result = await pyodide.runPythonAsync(`
 from annual_engine import NiceRecord, summarize_nice_records
@@ -419,8 +461,19 @@ summarize_nice_records(py_recs)
 
           const data = result.toJs({ deep: true });
 
+          debugText += `▶ 파이썬 반환 그룹 수: ${data.length}\n`;
+          debugText += `▶ 반환 데이터(raw):\n${JSON.stringify(data, null, 2)}\n`;
+          setNiceDebug(debugText);
+
           const tbody = document.getElementById("niceSummaryBody");
           tbody.innerHTML = "";
+
+          if (!data.length) {
+            status.textContent = "집계 결과가 0건입니다. (종별 그룹 없음)";
+            status.classList.add("danger");
+            document.getElementById("niceSummaryWrap").style.display = "block";
+            return;
+          }
 
           data.forEach(row => {
             const tr = document.createElement("tr");
@@ -441,6 +494,7 @@ summarize_nice_records(py_recs)
 
           document.getElementById("niceSummaryWrap").style.display = "block";
           status.textContent = "집계 완료.";
+          status.classList.remove("danger");
         } catch (err) {
           status.textContent = "오류 발생";
           status.classList.add("danger");
@@ -464,6 +518,7 @@ summarize_nice_records(py_recs)
         ? "파일을 선택한 뒤 [업로드·복무 집계] 버튼을 눌러주세요."
         : "Pyodide 로딩이 완료되면 업로드가 가능합니다.";
       status.classList.remove("danger");
+      setNiceDebug("(헤더 인식·레코드 내용은 여기 표시됩니다.)");
       clearPyError();
     });
 
