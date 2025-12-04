@@ -82,7 +82,7 @@
       <h1>관내여비 자동 검증기 (브라우저 Pyodide)</h1>
       <p class="sub">
         · 나이스 관내·관외 여비 <strong>원자료 그대로</strong> 엑셀(.xlsx)을 업로드하면, 브라우저 안에서 파이썬(pandas)로 <strong>관내여비만 자동 필터</strong>해서 월별 요약·이상행을 검증합니다.<br />
-        · 서버가 필요 없어서 GitHub Pages / 정적 웹에서도 동작합니다.
+        · <strong>지급금액이 수식이든, 값으로 편집해둔 파일이든 모두 검증 가능</strong>하도록 처리했습니다.
       </p>
     </div>
   </header>
@@ -90,16 +90,17 @@
   <main class="page-wrap">
     <section class="section">
       <h2 class="local-h2">1. 사용 전제 (원자료 열 구조)</h2>
-      <p>엑셀 원자료 열 항목(순서)은 다음과 같다고 가정합니다.</p>
+      <p>엑셀 원자료 1행 헤더는 다음과 같다고 가정합니다.</p>
       <pre class="log-box">시작일  종료일  출장구분  출장자  계좌정보  출장지  출장목적  부지급  여비금액  사업정보  지급금액</pre>
       <ul>
-        <li><strong>출장구분</strong> 열에 “관내”가 들어간 행만 관내여비로 간주합니다. (예: 관내출장, 관내 등)</li>
+        <li><strong>출장구분</strong> 열에 “관내”가 들어간 행만 관내여비로 간주합니다. (예: 관내-반일, 관내-종일 등)</li>
         <li><strong>부지급</strong> 열이 <code>아니오</code> 인 행만 실제 지급으로 봅니다.</li>
-        <li>금액 검증은 <strong>지급금액</strong> 기준으로 하고, 참고용으로 <strong>여비금액</strong>도 이상행 출력에 포함합니다.</li>
+        <li>금액 검증은 기본적으로 <strong>지급금액</strong> 기준으로 하되, 지급금액이 비었거나 0이면 <strong>여비금액</strong>으로 자동 대체합니다.</li>
         <li>관외행(출장구분에 “관내”가 아닌 것)은 자동으로 제외됩니다.</li>
       </ul>
       <p class="local-small muted">
-        ※ 원자료에서 열을 따로 삭제하거나 재정렬할 필요 없습니다. 위 이름만 그대로 존재하면 됩니다.
+        ※ 원자료에서 열을 따로 삭제하거나 재정렬할 필요 없습니다. 위 이름만 그대로 존재하면 됩니다.<br />
+        ※ 지급금액 열이 수식(=I2 등)인 경우에도, 엑셀에서 계산이 안 된 상태라 NaN으로 들어오면 여비금액을 자동 사용합니다.
       </p>
     </section>
 
@@ -146,7 +147,7 @@
 
   <footer class="site-footer">
     <div class="shell">
-      <p>관내여비 자동 검증기 (Pyodide / pandas 기반 · 원자료 버전)</p>
+      <p>관내여비 자동 검증기 (Pyodide / pandas 기반 · 원자료+편집본 대응)</p>
       <p class="muted">
         · 서버 없이 브라우저에서만 동작하는 시범 버전입니다. 대용량 파일이 많을 경우 브라우저 성능에 영향을 줄 수 있습니다.<br />
         · 실제 감사·지급 시에는 여비 규정, 기관 지침, 명령서·명세서 등과 함께 최종 판단해야 합니다.
@@ -185,17 +186,17 @@ FLAG_COL        = "부지급"     # 부지급 여부 ("아니오"만 실제 지�
 INNER_KEYWORD   = "관내"       # "관내"가 들어간 행만 관내여비로 간주
 FARE_COL        = "여비금액"   # 여비금액(참고용)
 BIZINFO_COL     = "사업정보"   # 참고용
-AMOUNT_COL      = "지급금액"   # 실제 지급액
+AMOUNT_COL      = "지급금액"   # 실제 지급액(수식이든 값이든 허용)
 
 # 관내 단가 (왕복 2km 이상, 4시간 기준)
 ALLOWED_AMOUNTS = {10000, 20000}
 
 def normalize_date_series(s):
-    \"\"\"날짜 열을 datetime으로 통일\"\"\"
+    \\"\\\"날짜 열을 datetime으로 통일\\"\\\"
     return pd.to_datetime(s, errors="coerce")
 
 def audit_inner_travel(file_list):
-    \"\"\"원자료(관내·관외 혼합) 엑셀에서 관내여비만 필터해 검증\"\"\"
+    \\"\\\"원자료(관내·관외 혼합) 엑셀에서 관내여비만 필터해 검증\\"\\\"
     frames = []
     for path in file_list:
         try:
@@ -240,8 +241,18 @@ def audit_inner_travel(file_list):
     df["연월"] = df["__날짜"].dt.to_period("M").astype(str)
 
     # 4) 금액·성명·참고열 정리
-    df["__지급액"] = pd.to_numeric(df[AMOUNT_COL], errors="coerce").fillna(0).astype(int)
-    df["__여비금액"] = pd.to_numeric(df[FARE_COL], errors="coerce").fillna(0).astype(int)
+    raw_amount = pd.to_numeric(df[AMOUNT_COL], errors="coerce")
+    raw_fare   = pd.to_numeric(df[FARE_COL], errors="coerce")
+
+    df["__여비금액"] = raw_fare.fillna(0).astype(int)
+
+    # 지급금액이 비었거나 0이면 여비금액으로 보정
+    df["__지급액"] = raw_amount.copy()
+    need_fare = df["__지급액"].isna() | (df["__지급액"] == 0)
+    df.loc[need_fare, "__지급액"] = df.loc[need_fare, "__여비금액"]
+
+    df["__지급액"] = df["__지급액"].fillna(0).astype(int)
+
     df["__성명"] = df[NAME_COL].astype(str).fillna("")
     df["__출장구분"] = df[TYPE_COL].astype(str).fillna("")
     df["__출장지"] = df.get(PLACE_COL, "").astype(str)
