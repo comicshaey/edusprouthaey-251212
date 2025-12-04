@@ -3,14 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>연차·미사용수당 슈퍼 울트라 계산기 (정적 + 나이스 엑셀 분석)</title>
-  <link rel="icon" href="/static/favicon.ico" />
+  <title>연차·미사용수당 슈퍼 울트라 계산기 (나이스 근무상황목록 분석 포함)</title>
+
   <!-- 공통 스타일 -->
+  <link rel="icon" href="/static/favicon.ico" />
   <link rel="stylesheet" href="/static/style.css" />
+
   <!-- 엑셀 파싱용 라이브러리 (SheetJS) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <!-- 계산기 전용 보조 스타일 -->
+  <!-- 이 페이지 전용 보조 스타일 -->
   <style>
     .tag {
       display: inline-flex;
@@ -23,31 +25,48 @@
       margin-left: 4px;
       white-space: nowrap;
     }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
     .result-grid {
       display: flex;
       flex-direction: column;
       gap: 6px;
       font-size: 0.92rem;
     }
+
     .result-item {
       display: flex;
       align-items: baseline;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .result-label {
       min-width: 200px;
       font-weight: 600;
     }
+
     .result-value {
       margin-left: auto;
       text-align: right;
       font-variant-numeric: tabular-nums;
     }
+
     .highlight {
       font-size: 1.05rem;
       font-weight: 700;
     }
+
+    .danger {
+      color: #c8352d;
+    }
+
     @media (max-width: 640px) {
       .result-label {
         min-width: 140px;
@@ -61,13 +80,9 @@
     <div class="shell">
       <h1>연차·미사용수당 슈퍼 울트라 계산기</h1>
       <p class="sub">
-        <b>근로기준법 + 단체협약 + 통상임금 지침 + 나이스 엑셀 원자료 분석</b>까지 한 번에 보는 정적 엔진입니다.<br />
+        <b>근로기준법 + 단체협약 + 통상임금 지침 + 나이스 근무상황목록(.xlsx) 분석</b>까지 한 번에 보는 정적 엔진입니다.<br />
         규정 세트를 선택하여 <b>연차일수·미사용수당</b>을 계산하고,<br />
-        나이스 근무상황부 엑셀을 업로드하여 <b>복무 종류별 일수/건수 요약</b>도 확인할 수 있습니다.<br />
-        <span style="font-size:0.8rem; color:#777;">
-          ※ 실제 단체협약·지침·나이스 코드값은 하단 스크립트의
-          <code>RULE_PROFILES</code>, <code>LEAVE_GROUP_MAP</code>을 직접 채워 넣어야 합니다.
-        </span>
+        나이스 <b>근무상황목록</b> 엑셀을 업로드하여 <b>복무 종류별 사용시간</b>도 자동 집계합니다.
       </p>
     </div>
   </header>
@@ -81,13 +96,13 @@
         <div class="field">
           <label for="ruleProfile">
             규정 세트
-            <span style="font-size:0.8rem; color:#777;">(단체협약/지침/법정 기본 등)</span>
+            <span class="muted" style="font-size:0.8rem;">(단체협약/지침/법정 기본 등)</span>
           </label>
           <select id="ruleProfile">
             <option value="law_basic">[법정 기본형] 근로기준법 단순 버전</option>
             <option value="gw_school_cba">[예시] 강원 교육공무직 학교근무자 단협(학년도 기준)</option>
             <option value="gw_institute_cba">[예시] 강원 교육공무직 기관근무자 단협(회계연도 기준)</option>
-            <option value="gw_wage_guideline">[예시] 통상임금 노사지도 지침 반영형(단가만 직접입력)</option>
+            <option value="gw_wage_guideline">[예시] 통상임금 지침 반영형(단가만 직접입력)</option>
             <option value="custom">[커스텀] 내가 직접 규정 적용</option>
           </select>
         </div>
@@ -133,7 +148,7 @@
         <div class="field">
           <label for="baseDate">
             연차 기준일
-            <span style="font-size:0.8rem; color:#777;">(규정 세트에서 자동 반영)</span>
+            <span class="muted" style="font-size:0.8rem;">(규정 세트에서 자동 반영)</span>
           </label>
           <input type="date" id="baseDate" />
         </div>
@@ -260,7 +275,7 @@
         <div class="field">
           <label for="grantedDays">
             실제 부여 연차일수
-            <span style="font-size:0.8rem; color:#777;">(단체협약·지침 기준 일수 직접 입력 가능)</span>
+            <span class="muted" style="font-size:0.8rem;">(단체협약·지침 기준 일수 직접 입력 가능)</span>
           </label>
           <input type="number" id="grantedDays" min="0" step="0.5" placeholder="예: 26" class="numeric" />
         </div>
@@ -281,7 +296,6 @@
         미사용 연차수당 계산을 위해 <b>통상임금(시급/일급/월급)</b>을 입력합니다.<br />
         통상임금 지침에서 말하는 “포함 수당/제외 수당”은
         이 계산기에서는 이미 정리된 단가라고 가정하고, 여기서는 <b>숫자만 넣는 구조</b>입니다.
-        (실제 포함 범위는 통상임금 지침·보수표를 보고 정리)
       </p>
 
       <div class="grid three">
@@ -307,7 +321,7 @@
         <div class="field">
           <label for="monthlyWorkDays">
             월 소정근로일수
-            <span style="font-size:0.8rem; color:#777;">(월급·일급 → 1일 통상임금 산출용)</span>
+            <span class="muted" style="font-size:0.8rem;">(월급·일급 → 1일 통상임금 산출용)</span>
           </label>
           <input type="number" id="monthlyWorkDays" min="0" step="0.1" placeholder="예: 20.5" class="numeric" />
         </div>
@@ -317,14 +331,14 @@
         <div class="field">
           <label for="customRoundingStep">
             커스텀 절사 단위 (커스텀 규정용)
-            <span style="font-size:0.8rem; color:#777;">예: 10 → 10원 단위, 100 → 100원 단위</span>
+            <span class="muted" style="font-size:0.8rem;">예: 10 → 10원 단위, 100 → 100원 단위</span>
           </label>
           <input type="number" id="customRoundingStep" min="1" step="1" placeholder="예: 10" class="numeric" />
         </div>
         <div class="field">
           <label for="customRoundingMode">
             커스텀 절사 방식
-            <span style="font-size:0.8rem; color:#777;">(커스텀 규정 선택 시만 적용)</span>
+            <span class="muted" style="font-size:0.8rem;">(커스텀 규정 선택 시만 적용)</span>
           </label>
           <select id="customRoundingMode">
             <option value="none">없음(원단위)</option>
@@ -385,26 +399,27 @@
       </p>
     </section>
 
-    <!-- 6. 나이스 엑셀 원자료 업로드 분석 -->
+    <!-- 6. 나이스 근무상황목록(.xlsx) 업로드 분석 -->
     <section class="section">
-      <h2>6. 나이스 엑셀 원자료 업로드 분석 (복무 종류별 요약)</h2>
+      <h2>6. 나이스 근무상황목록(.xlsx) 업로드 분석</h2>
       <p class="muted">
-        나이스 근무상황부 엑셀을 업로드하면, <b>복무구분별 건수/일수</b>를 자동 집계합니다.<br />
-        · 헤더(첫 행)에서 <b>“복무구분/근무상태/근태구분”</b> 등 텍스트가 포함된 열을 자동으로 찾아 사용합니다.<br />
-        · 한 행 = 1일로 가정해서 “건수 = 일수”로 집계하며,<br />
-        · 필요하면 하단 스크립트의 <code>LEAVE_GROUP_MAP</code>에 나이스 코드/명칭을 직접 추가해서<br />
-        상위 분류(연차/병가/경조휴가 등)를 묶어 쓸 수 있습니다.
+        나이스 메뉴에서 내려받은 <b>근무상황목록</b> 엑셀을 업로드하면,<br />
+        헤더의 <b>“종별”</b>과 <b>“일수/기간”</b>을 기준으로 복무 종류별 사용시간을 집계합니다.<br />
+        · 각 행은 하나의 신청 건으로 보고, <b>“0일 6시간 30분”</b>처럼 표시된 값을 합산합니다.<br />
+        · <b>1일 소정근로시간</b>을 위에서 입력하면, 총 시간을 <b>“며칠 + 몇 시간(10진법)”</b>으로 환산해 보여줍니다.
       </p>
 
       <div class="card">
         <div class="grid two">
           <div class="field">
-            <label for="niceFile">나이스 엑셀 파일 (.xlsx)</label>
+            <label for="niceFile">근무상황목록 엑셀 파일 (.xlsx)</label>
             <input type="file" id="niceFile" accept=".xlsx,.xls" />
           </div>
           <div class="field">
-            <label>복무구분 열 자동 인식 결과</label>
-            <div id="niceLeaveColDetect" class="muted">파일 업로드 후 자동 표시됩니다.</div>
+            <label>열 자동 인식 결과</label>
+            <div id="niceLeaveColDetect" class="muted">
+              파일 업로드 후 “종별 / 일수/기간” 열을 자동 인식합니다.
+            </div>
           </div>
         </div>
 
@@ -412,6 +427,10 @@
           <button type="button" class="btn primary" onclick="analyzeNiceExcel()">엑셀 분석 시작</button>
           <button type="button" class="btn ghost" onclick="resetNiceAnalysis()">분석 결과 초기화</button>
         </div>
+
+        <p class="muted" id="niceHoursPerDayNote" style="margin-top:8px; font-size:0.85rem;">
+          ※ 1일 소정근로시간을 입력하지 않으면 임시로 <b>8시간 기준</b>으로 일수 환산합니다.
+        </p>
       </div>
 
       <div class="table-wrapper" style="margin-top:14px; display:none;" id="niceSummaryWrap">
@@ -419,8 +438,11 @@
           <thead>
             <tr>
               <th>상위 분류(그룹)</th>
-              <th>원본 복무구분 값</th>
-              <th>건수(행 수 = 일수)</th>
+              <th>종별(나이스)</th>
+              <th>건수</th>
+              <th>합계 일·시·분</th>
+              <th>합계 시간(10진법, h)</th>
+              <th>환산 (일 + 시간)</th>
             </tr>
           </thead>
           <tbody id="niceSummaryBody"></tbody>
@@ -428,7 +450,8 @@
       </div>
 
       <p class="muted" id="niceSummaryNote" style="margin-top:8px; display:none; font-size:0.85rem;">
-        ※ <code>LEAVE_GROUP_MAP</code>에 나이스 코드/명칭을 추가하면 상위 분류가 더 정교해집니다.
+        ※ <code>LEAVE_GROUP_MAP</code>에 나이스 “종별” 값을 추가하면 상위 분류가 더 정교해집니다.<br />
+        · 예: <code>"병조퇴": "병가", "기타": "교육·기타유급"</code> 등으로 직접 매핑.
       </p>
     </section>
 
@@ -438,9 +461,7 @@
       <p class="muted">
         · 상단 스크립트의 <code>RULE_PROFILES</code>에 규정 세트를 추가/수정하면,
         같은 엔진으로 <b>여러 기관·연도·직종</b>을 돌릴 수 있게 설계되어 있습니다.<br />
-        · 예: <code>gw_school_cba</code>를 복사해서 <code>gw_school_cba_2026</code>,
-        <code>gw_institute_cba_2027</code> 등으로 파생.<br />
-        · 나이스 엑셀 분석 부분은 <code>LEAVE_GROUP_MAP</code>에 나이스 복무코드/명칭을 추가하면서
+        · 나이스 근무상황목록 분석은 <code>LEAVE_GROUP_MAP</code>에 “종별” 값을 추가하면서
         기관·연도별로 커스터마이징할 수 있습니다.<br />
         · 나중에 파이썬/DB 백엔드 버전을 만들면, 이 정적 버전의 로직을 그대로 서버 쪽으로 옮겨서
         API형으로 바꾸기 쉽도록 함수 구조를 단순하게 유지했습니다.
@@ -448,9 +469,12 @@
     </section>
   </main>
 
+  <!-- =========================
+       스크립트
+       ========================= -->
   <script>
     // -----------------------------------
-    // 0. 규정 세트 정의 (슈퍼 울트라 코어)
+    // 0. 규정 세트 정의
     // -----------------------------------
     const RULE_PROFILES = {
       // 1) 근로기준법 기본형
@@ -492,7 +516,7 @@
         moneyRounding:{
           step:10,
           mode:"floor",
-          label:"10원 단위 버림 (예시: 회계상 처리 편의를 위한 버림)"
+          label:"10원 단위 버림 (예시)"
         },
         docs:[
           "강원도교육청-전국학교비정규직연대회의 단체협약(2022) 연차유급휴가 조항",
@@ -537,10 +561,10 @@
       // 4) 통상임금 지침 반영형
       gw_wage_guideline:{
         id:"gw_wage_guideline",
-        name:"[예시] 통상임금 노사지도 지침 반영형(단가만 직접입력)",
+        name:"[예시] 통상임금 지침 반영형(단가만 직접입력)",
         yearBase:"MAR",
         yearBaseLabel:"3월 1일 기준 (학교 학년도형, 예시)",
-        grantType:"external_days", // 연차일수는 이미 계산돼서 내려왔다고 가정
+        grantType:"external_days",
         daysRounding:{
           step:0.5,
           mode:"floor",
@@ -549,7 +573,7 @@
         moneyRounding:{
           step:10,
           mode:"round",
-          label:"10원 단위 반올림 (예시: 지침상 권고형)"
+          label:"10원 단위 반올림 (예시)"
         },
         docs:[
           "교육공무직 등 통상임금 산정 변경사항 안내",
@@ -584,24 +608,13 @@
       }
     };
 
-    // 나이스 복무코드/명칭 → 상위 분류 맵 (예시)
-    // 실제 나이스 코드/명칭에 맞게 나중에 네가 채워 넣으면 됨.
+    // 나이스 근무상황목록의 종별 → 상위 분류 맵 (예시)
     const LEAVE_GROUP_MAP = {
-      // 예시들 (실제 값과 다를 수 있음)
-      "연차": "연차",
-      "연가": "연차",
-      "반일연가": "연차",
-      "시간연가": "연차",
       "병가": "병가",
-      "무급병가": "병가",
-      "출산휴가": "출산/육아",
-      "배우자출산휴가": "출산/육아",
-      "육아휴직": "출산/육아",
-      "경조휴가": "경조휴가",
-      "특별휴가": "특별휴가",
+      "병조퇴": "병가",
       "공가": "공가",
-      "무급휴가": "무급휴가"
-      // 필요할 때 계속 추가
+      "기타": "기타/교육·기타유급"
+      // 필요하면 여기 계속 추가
     };
 
     // 숫자 포맷
@@ -941,37 +954,73 @@
     }
 
     // -------------------------------
-    // 나이스 엑셀 분석 파트
+    // 나이스 근무상황목록 분석 파트
     // -------------------------------
 
-    // 헤더 배열에서 "복무구분" 같은 열 추측
+    // 헤더 배열에서 "종별", "일수/기간" 열 찾기
     function guessLeaveColumn(headers){
       if(!headers || headers.length === 0) return null;
-      const candidates = ["복무", "근무상태", "근태", "근무구분"];
+      const candidates = ["종별","복무","근무상태","근태","근무구분"];
       for(const h of headers){
         const name = String(h || "").trim();
         if(!name) continue;
         const hit = candidates.some(c => name.includes(c));
         if(hit) return name;
       }
-      // 못 찾으면 첫 번째 열
-      return headers[0];
+      return null;
+    }
+
+    function guessDurationColumn(headers){
+      if(!headers || headers.length === 0) return null;
+      const candidates = ["일수/기간","일수", "기간"];
+      for(const h of headers){
+        const name = String(h || "").trim();
+        if(!name) continue;
+        const hit = candidates.some(c => name.includes(c));
+        if(hit) return name;
+      }
+      return null;
+    }
+
+    // "0일 6시간 30분" 파싱
+    function parseNiceDuration(str, hoursPerDay){
+      if(!str) return {days:0, hours:0, minutes:0, totalMinutes:0};
+      const txt = String(str).trim();
+      const re = /(\d+)\s*일\s*(\d+)\s*시간\s*(\d+)\s*분/;
+      const m = txt.match(re);
+      if(!m){
+        return {days:0, hours:0, minutes:0, totalMinutes:0};
+      }
+      const d = parseInt(m[1],10) || 0;
+      const h = parseInt(m[2],10) || 0;
+      const mm = parseInt(m[3],10) || 0;
+      const totalMinutes = (d * hoursPerDay + h) * 60 + mm;
+      return {days:d, hours:h, minutes:mm, totalMinutes};
     }
 
     function analyzeNiceExcel(){
       const fileInput = document.getElementById("niceFile");
       const file = fileInput.files && fileInput.files[0];
       if(!file){
-        alert("나이스 엑셀 파일을 먼저 선택해주세요.");
+        alert("근무상황목록 엑셀 파일을 먼저 선택해주세요.");
         return;
+      }
+
+      // 1일 소정근로시간
+      let hpd = parseFloat(document.getElementById("hoursPerDay").value || "0");
+      const noteEl = document.getElementById("niceHoursPerDayNote");
+      if(!hpd || hpd <= 0){
+        hpd = 8;
+        noteEl.innerHTML = "※ 1일 소정근로시간 입력이 없어 <b>임시로 8시간 기준</b>으로 일수 환산했습니다.";
+      }else{
+        noteEl.innerHTML = `※ 1일 소정근로시간 <b>${hpd}시간</b> 기준으로 일수 환산했습니다.`;
       }
 
       const reader = new FileReader();
       reader.onload = function(e){
-        const data = e.target.result;
-        // 바이너리 스트림으로 읽어서 SheetJS 파싱
-        const wb = XLSX.read(data, { type: "binary" });
-        const sheetName = wb.SheetNames[0]; // 첫 번째 시트 기준
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheetName = wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
 
@@ -980,69 +1029,96 @@
           return;
         }
 
-        // 헤더 추출 (sheet_to_json이 키로 헤더를 이미 사용)
         const headers = Object.keys(rows[0]);
         const leaveCol = guessLeaveColumn(headers);
-        const detectView = document.getElementById("niceLeaveColDetect");
-        detectView.textContent = leaveCol
-          ? `추정된 복무구분 열: "${leaveCol}" (실제 나이스 헤더와 다르면 스크립트에서 수정 필요)`
-          : "복무구분 열을 자동으로 찾지 못했습니다. 스크립트의 guessLeaveColumn 로직을 수정해주세요.";
+        const durCol = guessDurationColumn(headers);
 
-        if(!leaveCol){
-          alert("복무구분 열을 찾지 못했습니다. 헤더명을 확인해서 guessLeaveColumn을 수정해야 합니다.");
+        const detectView = document.getElementById("niceLeaveColDetect");
+        detectView.textContent =
+          `종별 열: "${leaveCol || "미검출"}", 일수/기간 열: "${durCol || "미검출"}" (헤더명이 다르면 스크립트에서 candidates를 수정해야 합니다.)`;
+
+        if(!leaveCol || !durCol){
+          alert("종별 또는 일수/기간 열을 찾지 못했습니다. 헤더명을 확인해서 guessLeaveColumn / guessDurationColumn을 수정해야 합니다.");
           return;
         }
 
-        // 복무구분값별 카운트
-        const stats = {}; // key: 원본 복무구분값, value: 건수
+        const stats = {}; // key: 종별 원본, value: {count, totalMinutes}
+
         rows.forEach(r => {
-          const raw = r[leaveCol];
-          const key = (raw === null || raw === undefined || raw === "")
-            ? "미분류"
-            : String(raw).trim();
+          const leaveRaw = r[leaveCol];
+          const durRaw = r[durCol];
+
+          if(leaveRaw === null || leaveRaw === undefined || leaveRaw === ""){
+            // 종별이 비어 있는 합계 행 등은 스킵
+            return;
+          }
+
+          const key = String(leaveRaw).trim();
+          if(!key) return;
+
+          const parsed = parseNiceDuration(durRaw, hpd);
 
           if(!stats[key]){
-            stats[key] = { count: 0 };
+            stats[key] = { count:0, totalMinutes:0 };
           }
-          stats[key].count += 1; // 한 행 = 1일로 가정
+          stats[key].count += 1;
+          stats[key].totalMinutes += parsed.totalMinutes;
         });
 
-        // 결과 테이블 렌더링
         const tbody = document.getElementById("niceSummaryBody");
         tbody.innerHTML = "";
 
         Object.keys(stats).sort().forEach(rawKey => {
-          // 상위 분류 찾기
-          let group = "기타/미분류";
-          if(rawKey === "미분류"){
-            group = "미분류";
-          }else{
-            // LEAVE_GROUP_MAP에서 exact 매칭 시도
-            if(LEAVE_GROUP_MAP[rawKey]){
-              group = LEAVE_GROUP_MAP[rawKey];
-            }else{
-              // 키 안에 특정 단어가 들어가면 분류 (대충이라도 편하게)
-              const k = rawKey;
-              if(/연가|연차/.test(k)) group = "연차(연가)";
-              else if(/병가/.test(k)) group = "병가";
-              else if(/출산|육아/.test(k)) group = "출산/육아";
-              else if(/경조/.test(k)) group = "경조휴가";
-              else if(/공가/.test(k)) group = "공가";
-            }
-          }
+          const s = stats[rawKey];
+          const totalMinutes = s.totalMinutes;
+
+          // 총 시간 → 시·분
+          const totalHoursFloat = totalMinutes / 60;
+          const totalHoursInt = Math.floor(totalHoursFloat);
+          const minutes = Math.round(totalMinutes - totalHoursInt * 60);
+
+          // 10진법 시간 (소수 첫째 자리, 둘째 자리에서 반올림)
+          const decimalHours = Math.round(totalHoursFloat * 10) / 10;
+
+          // 일수 환산 (1일 = hpd시간)
+          const daysFromHours = Math.floor(decimalHours / hpd);
+          const remainHoursDecimal = Math.round((decimalHours - daysFromHours * hpd) * 10) / 10;
+
+          // "합계 일·시·분" 표현용 (hpd 활용)
+          const dayByMinutes = Math.floor(totalMinutes / (hpd * 60));
+          const restMinutesForDay = totalMinutes - dayByMinutes * hpd * 60;
+          const restHoursForDay = Math.floor(restMinutesForDay / 60);
+          const restMinutes = restMinutesForDay - restHoursForDay * 60;
+
+          // 상위 분류
+          let group = LEAVE_GROUP_MAP[rawKey] || "기타/미분류";
 
           const tr = document.createElement("tr");
           const tdGroup = document.createElement("td");
           const tdRaw = document.createElement("td");
           const tdCount = document.createElement("td");
+          const tdSum = document.createElement("td");
+          const tdDecimal = document.createElement("td");
+          const tdConverted = document.createElement("td");
 
           tdGroup.textContent = group;
           tdRaw.textContent = rawKey;
-          tdCount.textContent = stats[rawKey].count.toLocaleString("ko-KR");
+          tdCount.textContent = s.count.toLocaleString("ko-KR");
+
+          tdSum.textContent =
+            `${dayByMinutes}일 ${restHoursForDay}시간 ${restMinutes}분`;
+
+          tdDecimal.textContent = `${decimalHours.toFixed(1)} 시간`;
+
+          tdConverted.textContent =
+            `${daysFromHours}일 ${remainHoursDecimal.toFixed(1)}시간`;
 
           tr.appendChild(tdGroup);
           tr.appendChild(tdRaw);
           tr.appendChild(tdCount);
+          tr.appendChild(tdSum);
+          tr.appendChild(tdDecimal);
+          tr.appendChild(tdConverted);
           tbody.appendChild(tr);
         });
 
@@ -1050,19 +1126,21 @@
         document.getElementById("niceSummaryNote").style.display = "block";
       };
 
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     }
 
     function resetNiceAnalysis(){
       document.getElementById("niceFile").value = "";
       document.getElementById("niceLeaveColDetect").textContent =
-        "파일 업로드 후 자동 표시됩니다.";
+        "파일 업로드 후 “종별 / 일수/기간” 열을 자동 인식합니다.";
       document.getElementById("niceSummaryBody").innerHTML = "";
       document.getElementById("niceSummaryWrap").style.display = "none";
       document.getElementById("niceSummaryNote").style.display = "none";
+      document.getElementById("niceHoursPerDayNote").innerHTML =
+        "※ 1일 소정근로시간을 입력하지 않으면 임시로 <b>8시간 기준</b>으로 일수 환산합니다.";
     }
 
-    // 초기화
+    // 전체 초기화
     function resetAll(){
       if(!confirm("입력 내용을 모두 초기화할까요?")) return;
 
@@ -1111,7 +1189,5 @@
       onProfileChange();
     })();
   </script>
-
-  <script src="/static/global-loader.js?v=1"></script>
 </body>
 </html>
